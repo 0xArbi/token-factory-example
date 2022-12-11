@@ -1,11 +1,33 @@
 #[cfg(test)]
 mod tests {
-    use crate::helpers::CwTemplateContract;
-    use crate::msg::InstantiateMsg;
-    use cosmwasm_std::{Addr, Coin, Empty, Uint128};
-    use cw_multi_test::{App, AppBuilder, Contract, ContractWrapper, Executor};
+    use std::fmt::Debug;
 
-    pub fn contract_template() -> Box<dyn Contract<Empty>> {
+    use crate::helpers::CwTemplateContract;
+    use crate::msg::{ExecuteMsg, InstantiateMsg, QueryMsg};
+    use cosmwasm_std::{Addr, CustomQuery};
+    use cw_multi_test::{Contract, ContractWrapper, Executor};
+
+    use schemars::JsonSchema;
+    use serde::de::DeserializeOwned;
+    use token_bindings::{TokenFactoryMsg, TokenFactoryQuery};
+    use token_bindings_test::error::ContractError;
+    use token_bindings_test::TokenFactoryApp;
+
+    pub fn contract<C, Q>() -> Box<dyn Contract<C, Q>>
+    where
+        C: Clone + Debug + PartialEq + JsonSchema + DeserializeOwned + 'static,
+        Q: CustomQuery + DeserializeOwned + 'static,
+        ContractWrapper<
+            ExecuteMsg,
+            InstantiateMsg,
+            QueryMsg,
+            ContractError,
+            ContractError,
+            cosmwasm_std::StdError,
+            TokenFactoryMsg,
+            TokenFactoryQuery,
+        >: Contract<C, Q>,
+    {
         let contract = ContractWrapper::new(
             crate::contract::execute,
             crate::contract::instantiate,
@@ -18,25 +40,16 @@ mod tests {
     const ADMIN: &str = "ADMIN";
     const NATIVE_DENOM: &str = "denom";
 
-    fn mock_app() -> App {
-        AppBuilder::new().build(|router, _, storage| {
-            router
-                .bank
-                .init_balance(
-                    storage,
-                    &Addr::unchecked(USER),
-                    vec![Coin {
-                        denom: NATIVE_DENOM.to_string(),
-                        amount: Uint128::new(1),
-                    }],
-                )
-                .unwrap();
-        })
+    fn mock_app() -> TokenFactoryApp {
+        TokenFactoryApp::new()
     }
 
-    fn proper_instantiate() -> (App, CwTemplateContract) {
+    fn proper_instantiate() -> (TokenFactoryApp, CwTemplateContract) {
         let mut app = mock_app();
-        let cw_template_id = app.store_code(contract_template());
+
+        let c: Box<dyn Contract<TokenFactoryMsg, TokenFactoryQuery>> = contract();
+
+        let cw_template_id = app.store_code(contract());
 
         let msg = InstantiateMsg { count: 1i32 };
         let cw_template_contract_addr = app
@@ -56,6 +69,8 @@ mod tests {
     }
 
     mod count {
+        use cosmwasm_std::{to_binary, CosmosMsg, WasmMsg};
+
         use super::*;
         use crate::msg::ExecuteMsg;
 
@@ -64,8 +79,13 @@ mod tests {
             let (mut app, cw_template_contract) = proper_instantiate();
 
             let msg = ExecuteMsg::Increment {};
+            let wasm_msg = CosmosMsg::Wasm(WasmMsg::Execute {
+                contract_addr: cw_template_contract.addr().to_string(),
+                msg: to_binary(&msg).unwrap(),
+                funds: vec![],
+            });
             let cosmos_msg = cw_template_contract.call(msg).unwrap();
-            app.execute(Addr::unchecked(USER), cosmos_msg).unwrap();
+            app.execute(Addr::unchecked(USER), wasm_msg).unwrap();
         }
     }
 }

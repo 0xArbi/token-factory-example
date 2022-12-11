@@ -2,6 +2,7 @@
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult};
 use cw2::set_contract_version;
+use token_bindings::TokenFactoryMsg;
 
 use crate::error::ContractError;
 use crate::msg::{ExecuteMsg, GetCountResponse, InstantiateMsg, QueryMsg};
@@ -17,7 +18,7 @@ pub fn instantiate(
     _env: Env,
     info: MessageInfo,
     msg: InstantiateMsg,
-) -> Result<Response, ContractError> {
+) -> Result<Response<TokenFactoryMsg>, ContractError> {
     let state = State {
         count: msg.count,
         owner: info.sender.clone(),
@@ -37,7 +38,7 @@ pub fn execute(
     _env: Env,
     info: MessageInfo,
     msg: ExecuteMsg,
-) -> Result<Response, ContractError> {
+) -> Result<Response<TokenFactoryMsg>, ContractError> {
     match msg {
         ExecuteMsg::Increment {} => execute::increment(deps),
         ExecuteMsg::Reset { count } => execute::reset(deps, info, count),
@@ -47,7 +48,7 @@ pub fn execute(
 pub mod execute {
     use super::*;
 
-    pub fn increment(deps: DepsMut) -> Result<Response, ContractError> {
+    pub fn increment(deps: DepsMut) -> Result<Response<TokenFactoryMsg>, ContractError> {
         STATE.update(deps.storage, |mut state| -> Result<_, ContractError> {
             state.count += 1;
             Ok(state)
@@ -56,7 +57,11 @@ pub mod execute {
         Ok(Response::new().add_attribute("action", "increment"))
     }
 
-    pub fn reset(deps: DepsMut, info: MessageInfo, count: i32) -> Result<Response, ContractError> {
+    pub fn reset(
+        deps: DepsMut,
+        info: MessageInfo,
+        count: i32,
+    ) -> Result<Response<TokenFactoryMsg>, ContractError> {
         STATE.update(deps.storage, |mut state| -> Result<_, ContractError> {
             if info.sender != state.owner {
                 return Err(ContractError::Unauthorized {});
